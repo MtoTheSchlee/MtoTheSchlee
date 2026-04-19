@@ -1,0 +1,996 @@
+// KK-OS – Prisma schema.
+// This schema mirrors docs/03-data-model.md. Every table is tenant-scoped.
+// Row-Level-Security is toggled on at the Postgres layer in production;
+// in dev we rely on API-level tenant guards.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// --------------------------- Enums ------------------------------------
+enum Role {
+  owner
+  planner
+  purchaser
+  installer
+  marketer
+  auditor
+  agent
+  voice_operator
+}
+
+enum UserStatus {
+  active
+  invited
+  disabled
+}
+
+enum CustomerType {
+  private
+  b2b
+}
+
+enum ProjectStage {
+  lead
+  planning
+  quoted
+  won
+  in_execution
+  delivered
+  completed
+  lost
+  on_hold
+}
+
+enum SupplierType {
+  cabinets
+  appliances
+  countertops
+  sinks
+  accessories
+  service
+  other
+}
+
+enum OrderStatus {
+  draft
+  sent
+  confirmed
+  partially_confirmed
+  delivered
+  partially_delivered
+  invoiced
+  closed
+  cancelled
+}
+
+enum AbStatus {
+  received
+  parsed
+  matched
+  deviating
+  accepted
+  rejected
+}
+
+enum Ampel {
+  green
+  yellow
+  red
+}
+
+enum DiscrepancyType {
+  missing_position
+  wrong_qty
+  price_delta
+  date_delta
+  unexpected_position
+  ambiguous
+}
+
+enum DiscrepancyState {
+  open
+  in_progress
+  waiting_supplier
+  resolved
+  wontfix
+}
+
+enum DocumentKind {
+  quote
+  order
+  ab
+  invoice
+  delivery_note
+  installation_sheet
+  photo
+  contract
+  note
+  other
+}
+
+enum DocumentSource {
+  upload
+  email
+  agent
+  scan
+}
+
+enum EmailDirection {
+  in
+  out
+}
+
+enum EmailClassification {
+  ab
+  quote
+  invoice
+  delivery_date
+  complaint
+  customer_request
+  promo
+  unknown
+}
+
+enum EmailStatus {
+  new
+  triaged
+  assigned
+  answered
+  archived
+}
+
+enum MailboxState {
+  active
+  disabled
+  error
+}
+
+enum BoardObjectKind {
+  generic
+  project
+  order
+  order_confirmation
+  discrepancy
+  email
+  appointment
+  complaint
+  social_post
+  voice_session
+}
+
+enum CardPriority {
+  low
+  med
+  high
+  urgent
+}
+
+enum CardStatus {
+  open
+  blocked
+  in_progress
+  done
+  cancelled
+}
+
+enum TaskState {
+  open
+  in_progress
+  blocked
+  done
+}
+
+enum AppointmentKind {
+  consultation
+  measurement
+  delivery
+  installation
+  rework
+  complaint_visit
+  internal
+}
+
+enum AppointmentState {
+  proposed
+  confirmed
+  moved
+  cancelled
+  done
+}
+
+enum SocialChannel {
+  instagram
+  facebook
+  linkedin
+  tiktok
+  web
+}
+
+enum SocialState {
+  idea
+  draft
+  review
+  approved
+  scheduled
+  published
+  archived
+}
+
+enum AgentKey {
+  mail
+  ab
+  kundenakte
+  termin
+  controlling
+  social
+  speech
+  orchestrator
+}
+
+enum AgentRunState {
+  queued
+  running
+  succeeded
+  failed
+  cancelled
+}
+
+enum SpeechMode {
+  push_to_talk
+  continuous
+  dictation
+}
+
+enum SttJobState {
+  queued
+  running
+  done
+  failed
+}
+
+enum TtsJobState {
+  queued
+  running
+  done
+  failed
+}
+
+enum SpeechIntent {
+  open_board
+  find_email
+  create_appointment
+  read_discrepancies
+  draft_social_post
+  summarize_project
+  unknown
+}
+
+enum SpeechCommandState {
+  new
+  routed
+  completed
+  failed
+}
+
+enum VoiceProfileState {
+  draft
+  pending_consent
+  active
+  suspended
+  revoked
+}
+
+enum VoicePurpose {
+  self_tts
+  character_voice
+  experiment
+}
+
+// --------------------------- Tenants / Users --------------------------
+model Tenant {
+  id        String   @id @default(uuid())
+  name      String
+  createdAt DateTime @default(now())
+  users     User[]
+}
+
+model User {
+  id           String   @id @default(uuid())
+  tenantId     String
+  tenant       Tenant   @relation(fields: [tenantId], references: [id])
+  email        String
+  name         String
+  passwordHash String?
+  status       UserStatus @default(active)
+  mfaEnabled   Boolean  @default(false)
+  lastLoginAt  DateTime?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  roles        UserRole[]
+  voiceProfiles VoiceProfile[]
+
+  @@unique([tenantId, email])
+  @@index([tenantId])
+}
+
+model UserRole {
+  id      String @id @default(uuid())
+  userId  String
+  role    Role
+  scope   Json?
+  user    User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, role])
+}
+
+model AuditLog {
+  id               String   @id @default(uuid())
+  tenantId         String
+  actorUserId      String?
+  actorAgentRunId  String?
+  action           String
+  entity           String
+  entityId         String?
+  before           Json?
+  after            Json?
+  ip               String?
+  userAgent        String?
+  createdAt        DateTime @default(now())
+  hashPrev         String?
+  hashSelf         String?
+
+  @@index([tenantId, createdAt])
+  @@index([entity, entityId])
+}
+
+// --------------------------- CRM --------------------------------------
+model Customer {
+  id         String       @id @default(uuid())
+  tenantId   String
+  type       CustomerType @default(private)
+  salutation String?
+  firstName  String?
+  lastName   String?
+  company    String?
+  email      String?
+  phone      String?
+  address    Json?
+  notes      String?
+  consent    Json?
+  source     String?
+  createdAt  DateTime     @default(now())
+  updatedAt  DateTime     @updatedAt
+
+  projects   Project[]
+  emails     Email[]
+  documents  Document[]
+
+  @@index([tenantId, lastName])
+  @@index([tenantId, company])
+}
+
+model Project {
+  id              String        @id @default(uuid())
+  tenantId        String
+  customerId      String
+  customer        Customer      @relation(fields: [customerId], references: [id])
+  code            String
+  title           String
+  stage           ProjectStage  @default(lead)
+  budget          Decimal?      @db.Decimal(14, 2)
+  plannerUserId   String?
+  startedAt       DateTime?
+  completedAt     DateTime?
+  createdAt       DateTime      @default(now())
+  updatedAt       DateTime      @updatedAt
+
+  orders          Order[]
+  documents       Document[]
+  emails          Email[]
+  appointments    Appointment[]
+  socialPosts     SocialPost[]
+  orderConfirmations OrderConfirmation[]
+  discrepancyCases DiscrepancyCase[]
+  profitability   ProfitabilityMetric[]
+
+  @@unique([tenantId, code])
+  @@index([tenantId, stage])
+}
+
+// --------------------------- Suppliers / Orders -----------------------
+model Supplier {
+  id               String         @id @default(uuid())
+  tenantId         String
+  name             String
+  type             SupplierType   @default(other)
+  contact          Json?
+  deliveryTerms    String?
+  notes            String?
+  reliabilityScore Decimal?       @db.Decimal(5, 2)
+  config           Json?
+  createdAt        DateTime       @default(now())
+  updatedAt        DateTime       @updatedAt
+
+  orders             Order[]
+  orderConfirmations OrderConfirmation[]
+  emails             Email[]
+
+  @@unique([tenantId, name])
+  @@index([tenantId])
+}
+
+model Order {
+  id                   String        @id @default(uuid())
+  tenantId             String
+  projectId            String
+  project              Project       @relation(fields: [projectId], references: [id])
+  supplierId           String
+  supplier             Supplier      @relation(fields: [supplierId], references: [id])
+  orderNumber          String
+  status               OrderStatus   @default(draft)
+  orderedAt            DateTime?
+  expectedDeliveryAt   DateTime?
+  totalNet             Decimal?      @db.Decimal(14, 2)
+  createdAt            DateTime      @default(now())
+  updatedAt            DateTime      @updatedAt
+
+  items                OrderItem[]
+  confirmations        OrderConfirmation[]
+  discrepancies        DiscrepancyCase[]
+
+  @@unique([tenantId, orderNumber])
+  @@index([tenantId, status])
+  @@index([projectId])
+}
+
+model OrderItem {
+  id                   String   @id @default(uuid())
+  orderId              String
+  order                Order    @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  positionNo           Int
+  sku                  String?
+  description          String
+  qty                  Decimal  @db.Decimal(14, 4)
+  unit                 String?
+  unitPriceNet         Decimal? @db.Decimal(14, 4)
+  requestedDeliveryAt  DateTime?
+  attributes           Json?
+
+  @@unique([orderId, positionNo])
+}
+
+model OrderConfirmation {
+  id              String      @id @default(uuid())
+  tenantId        String
+  projectId       String
+  project         Project     @relation(fields: [projectId], references: [id])
+  supplierId      String
+  supplier        Supplier    @relation(fields: [supplierId], references: [id])
+  orderId         String?
+  order           Order?      @relation(fields: [orderId], references: [id])
+  emailId         String?
+  email           Email?      @relation(fields: [emailId], references: [id])
+  documentId      String?
+  document        Document?   @relation(fields: [documentId], references: [id])
+  abNumber        String?
+  confirmedAt     DateTime?
+  status          AbStatus    @default(received)
+  parsedPayload   Json?
+  ampel           Ampel?      @default(green)
+  createdAt       DateTime    @default(now())
+  updatedAt       DateTime    @updatedAt
+
+  items           OrderConfirmationItem[]
+  discrepancies   DiscrepancyCase[]
+
+  @@index([tenantId, status])
+  @@index([orderId])
+  @@index([supplierId])
+}
+
+model OrderConfirmationItem {
+  id                   String @id @default(uuid())
+  orderConfirmationId  String
+  orderConfirmation    OrderConfirmation @relation(fields: [orderConfirmationId], references: [id], onDelete: Cascade)
+  positionNo           Int
+  sku                  String?
+  description          String
+  qty                  Decimal  @db.Decimal(14, 4)
+  unit                 String?
+  unitPriceNet         Decimal? @db.Decimal(14, 4)
+  confirmedDeliveryAt  DateTime?
+  attributes           Json?
+}
+
+model DiscrepancyCase {
+  id                    String           @id @default(uuid())
+  tenantId              String
+  projectId             String
+  project               Project          @relation(fields: [projectId], references: [id])
+  orderId               String
+  order                 Order            @relation(fields: [orderId], references: [id])
+  orderConfirmationId   String
+  orderConfirmation     OrderConfirmation @relation(fields: [orderConfirmationId], references: [id])
+  type                  DiscrepancyType
+  severity              String           @default("medium") // low | medium | high
+  state                 DiscrepancyState @default(open)
+  assigneeUserId        String?
+  diff                  Json
+  resolutionNote        String?
+  resolvedAt            DateTime?
+  createdAt             DateTime         @default(now())
+  updatedAt             DateTime         @updatedAt
+
+  @@index([tenantId, state])
+  @@index([orderConfirmationId])
+}
+
+// --------------------------- DMS --------------------------------------
+model Document {
+  id                        String         @id @default(uuid())
+  tenantId                  String
+  projectId                 String?
+  project                   Project?       @relation(fields: [projectId], references: [id])
+  customerId                String?
+  customer                  Customer?      @relation(fields: [customerId], references: [id])
+  supplierId                String?
+  kind                      DocumentKind   @default(other)
+  title                     String
+  mime                      String
+  sizeBytes                 Int
+  storageKey                String
+  checksum                  String?
+  version                   Int            @default(1)
+  parentDocumentId          String?
+  parent                    Document?      @relation("DocumentVersions", fields: [parentDocumentId], references: [id])
+  versions                  Document[]     @relation("DocumentVersions")
+  source                    DocumentSource @default(upload)
+  classificationConfidence  Decimal?       @db.Decimal(5, 4)
+  toReview                  Boolean        @default(false)
+  metadata                  Json?
+  createdAt                 DateTime       @default(now())
+  updatedAt                 DateTime       @updatedAt
+
+  orderConfirmations        OrderConfirmation[]
+  emailAttachments          EmailAttachment[]
+  consentForVoiceProfiles   VoiceProfile[]     @relation("VoiceConsentDocument")
+
+  @@index([tenantId, kind])
+  @@index([projectId])
+  @@index([customerId])
+}
+
+// --------------------------- Email ------------------------------------
+model Mailbox {
+  id          String       @id @default(uuid())
+  tenantId    String
+  displayName String
+  address     String
+  protocol    String       @default("imap")
+  host        String
+  port        Int
+  username    String
+  passwordEnc String
+  folders     Json?
+  state       MailboxState @default(active)
+  lastSyncAt  DateTime?
+  lastError   String?
+  createdAt   DateTime     @default(now())
+  updatedAt   DateTime     @updatedAt
+
+  emails      Email[]
+
+  @@unique([tenantId, address])
+}
+
+model Email {
+  id                       String              @id @default(uuid())
+  tenantId                 String
+  mailboxId                String
+  mailbox                  Mailbox             @relation(fields: [mailboxId], references: [id])
+  messageId                String
+  threadId                 String?
+  inReplyTo                String?
+  direction                EmailDirection      @default(in)
+  fromAddr                 String
+  toAddrs                  String[]
+  ccAddrs                  String[]
+  bccAddrs                 String[]
+  subject                  String
+  receivedAt               DateTime?
+  sentAt                   DateTime?
+  classification           EmailClassification @default(unknown)
+  classificationConfidence Decimal?            @db.Decimal(5, 4)
+  projectId                String?
+  project                  Project?            @relation(fields: [projectId], references: [id])
+  customerId               String?
+  customer                 Customer?           @relation(fields: [customerId], references: [id])
+  supplierId               String?
+  supplier                 Supplier?           @relation(fields: [supplierId], references: [id])
+  status                   EmailStatus         @default(new)
+  rawHeaders               Json?
+  bodyText                 String?
+  bodyHtml                 String?
+  bodyRedacted             String?
+  hasAttachments           Boolean             @default(false)
+  createdAt                DateTime            @default(now())
+  updatedAt                DateTime            @updatedAt
+
+  attachments              EmailAttachment[]
+  events                   EmailEvent[]
+  orderConfirmations       OrderConfirmation[]
+
+  @@unique([tenantId, mailboxId, messageId])
+  @@index([tenantId, classification, receivedAt])
+  @@index([projectId])
+}
+
+model EmailAttachment {
+  id          String    @id @default(uuid())
+  emailId     String
+  email       Email     @relation(fields: [emailId], references: [id], onDelete: Cascade)
+  filename    String
+  mime        String
+  sizeBytes   Int
+  storageKey  String
+  documentId  String?
+  document    Document? @relation(fields: [documentId], references: [id])
+}
+
+model EmailEvent {
+  id              String   @id @default(uuid())
+  emailId         String
+  email           Email    @relation(fields: [emailId], references: [id], onDelete: Cascade)
+  kind            String
+  payload         Json?
+  actorUserId     String?
+  actorAgentRunId String?
+  at              DateTime @default(now())
+
+  @@index([emailId, at])
+}
+
+// --------------------------- Board ------------------------------------
+model Board {
+  id          String      @id @default(uuid())
+  tenantId    String
+  key         String
+  name        String
+  description String?
+  visibility  String      @default("tenant")
+  ownerUserId String?
+  config      Json?
+  createdAt   DateTime    @default(now())
+  updatedAt   DateTime    @updatedAt
+
+  lists       BoardList[]
+  cards       BoardCard[]
+
+  @@unique([tenantId, key])
+}
+
+model BoardList {
+  id         String      @id @default(uuid())
+  boardId    String
+  board      Board       @relation(fields: [boardId], references: [id], onDelete: Cascade)
+  name       String
+  orderIndex Int
+  wipLimit   Int?
+  rules      Json?
+
+  cards      BoardCard[]
+
+  @@unique([boardId, orderIndex])
+}
+
+model BoardCard {
+  id              String          @id @default(uuid())
+  boardId         String
+  board           Board           @relation(fields: [boardId], references: [id], onDelete: Cascade)
+  listId          String
+  list            BoardList       @relation(fields: [listId], references: [id])
+  title           String
+  summary         String?
+  priority        CardPriority    @default(med)
+  dueAt           DateTime?
+  assigneeUserId  String?
+  watchers        String[]
+  labels          String[]
+  status          CardStatus      @default(open)
+  objectKind      BoardObjectKind @default(generic)
+  objectId        String?
+  orderIndex      Int
+  metadata        Json?
+  createdAt       DateTime        @default(now())
+  updatedAt       DateTime        @updatedAt
+
+  events          BoardCardEvent[]
+  tasks           Task[]
+
+  @@unique([boardId, objectKind, objectId], map: "board_card_object_unique")
+  @@index([boardId, listId, orderIndex])
+  @@index([objectKind, objectId])
+}
+
+model BoardCardEvent {
+  id        String    @id @default(uuid())
+  cardId    String
+  card      BoardCard @relation(fields: [cardId], references: [id], onDelete: Cascade)
+  kind      String
+  payload   Json?
+  actorId   String?
+  at        DateTime  @default(now())
+
+  @@index([cardId, at])
+}
+
+model Task {
+  id             String     @id @default(uuid())
+  tenantId       String
+  parentKind     String
+  parentId       String
+  title          String
+  assigneeUserId String?
+  dueAt          DateTime?
+  state          TaskState  @default(open)
+  priority       CardPriority @default(med)
+  notes          String?
+  cardId         String?
+  card           BoardCard? @relation(fields: [cardId], references: [id])
+  createdAt      DateTime   @default(now())
+  updatedAt      DateTime   @updatedAt
+
+  @@index([tenantId, state])
+  @@index([parentKind, parentId])
+}
+
+// --------------------------- Appointments -----------------------------
+model Appointment {
+  id                  String          @id @default(uuid())
+  tenantId            String
+  projectId           String?
+  project             Project?        @relation(fields: [projectId], references: [id])
+  customerId          String?
+  kind                AppointmentKind
+  title               String
+  startAt             DateTime
+  endAt               DateTime
+  location            Json?
+  participants        Json?
+  state               AppointmentState @default(confirmed)
+  source              String           @default("manual")
+  externalCalendarRef String?
+  createdAt           DateTime         @default(now())
+  updatedAt           DateTime         @updatedAt
+
+  @@index([tenantId, startAt])
+  @@index([projectId])
+}
+
+model AppointmentSuggestion {
+  id                   String   @id @default(uuid())
+  tenantId             String
+  sourceEmailId        String
+  proposed             Json
+  score                Decimal  @db.Decimal(5, 4)
+  state                String   @default("new") // new | accepted | rejected | merged
+  acceptedAppointmentId String?
+  createdAt            DateTime @default(now())
+
+  @@index([tenantId, state])
+}
+
+// --------------------------- Social -----------------------------------
+model SocialPost {
+  id                   String        @id @default(uuid())
+  tenantId             String
+  projectId            String?
+  project              Project?      @relation(fields: [projectId], references: [id])
+  channel              SocialChannel
+  contentText          String
+  mediaRefs            String[]
+  scheduledAt          DateTime?
+  state                SocialState   @default(idea)
+  approvals            Json?
+  metrics              Json?
+  createdByAgentRunId  String?
+  createdAt            DateTime      @default(now())
+  updatedAt            DateTime      @updatedAt
+
+  @@index([tenantId, state])
+}
+
+// --------------------------- Metrics ----------------------------------
+model ProfitabilityMetric {
+  id           String   @id @default(uuid())
+  tenantId     String
+  projectId    String
+  project      Project  @relation(fields: [projectId], references: [id])
+  revenueNet   Decimal  @db.Decimal(14, 2)
+  costGoods    Decimal  @db.Decimal(14, 2)
+  costLabor    Decimal  @db.Decimal(14, 2)
+  costOther    Decimal  @db.Decimal(14, 2)
+  marginNet    Decimal  @db.Decimal(14, 2)
+  computedAt   DateTime @default(now())
+  sourceRunId  String?
+
+  @@index([tenantId, projectId])
+}
+
+model MetricDaily {
+  date     DateTime
+  tenantId String
+  key      String
+  value    Decimal  @db.Decimal(18, 4)
+  dims     Json?
+
+  @@id([date, tenantId, key])
+  @@index([tenantId, key, date])
+}
+
+// --------------------------- Agents -----------------------------------
+model Agent {
+  id          String   @id @default(uuid())
+  tenantId    String?
+  key         AgentKey
+  displayName String
+  version     String
+  enabled     Boolean  @default(true)
+  config      Json?
+
+  runs        AgentRun[]
+
+  @@unique([tenantId, key, version])
+}
+
+model AgentRun {
+  id              String        @id @default(uuid())
+  tenantId        String
+  agentKey        AgentKey
+  agent           Agent?        @relation(fields: [agentDbId], references: [id])
+  agentDbId       String?
+  trigger         String
+  triggerRef      String?
+  input           Json?
+  output          Json?
+  state           AgentRunState @default(queued)
+  startedAt       DateTime?
+  finishedAt      DateTime?
+  error           Json?
+  parentRunId     String?
+  idempotencyKey  String
+
+  events          AgentEvent[]
+
+  @@unique([tenantId, idempotencyKey])
+  @@index([tenantId, agentKey, state])
+}
+
+model AgentEvent {
+  id        String   @id @default(uuid())
+  runId     String
+  run       AgentRun @relation(fields: [runId], references: [id], onDelete: Cascade)
+  kind      String
+  payload   Json?
+  at        DateTime @default(now())
+
+  @@index([runId, at])
+}
+
+// --------------------------- Speech -----------------------------------
+model VoiceProfile {
+  id                 String            @id @default(uuid())
+  tenantId           String
+  userId             String
+  user               User              @relation(fields: [userId], references: [id])
+  name               String
+  consentDocumentId  String?
+  consentDocument    Document?         @relation("VoiceConsentDocument", fields: [consentDocumentId], references: [id])
+  consentSignedAt    DateTime?
+  samplesStorageKeys String[]
+  embeddingKey       String?
+  state              VoiceProfileState @default(draft)
+  purpose            VoicePurpose      @default(self_tts)
+  watermarking       Boolean           @default(true)
+  kmsKeyId           String?
+  createdBy          String?
+  revokedAt          DateTime?
+  createdAt          DateTime          @default(now())
+  updatedAt          DateTime          @updatedAt
+
+  @@index([tenantId, state])
+}
+
+model SpeechSession {
+  id               String      @id @default(uuid())
+  tenantId         String
+  userId           String
+  startedAt        DateTime    @default(now())
+  endedAt          DateTime?
+  mode             SpeechMode  @default(push_to_talk)
+  locale           String      @default("de-DE")
+  deviceInfo       Json?
+  consentSnapshot  Json?
+
+  sttJobs          SttJob[]
+  ttsJobs          TtsJob[]
+  transcripts      Transcript[]
+  commands         SpeechCommand[]
+
+  @@index([tenantId, startedAt])
+}
+
+model SttJob {
+  id               String     @id @default(uuid())
+  tenantId         String
+  sessionId        String?
+  session          SpeechSession? @relation(fields: [sessionId], references: [id])
+  audioStorageKey  String
+  mime             String
+  durationMs       Int?
+  model            String?
+  language         String?
+  state            SttJobState @default(queued)
+  partialsCount    Int         @default(0)
+  finalText        String?
+  finalConfidence  Decimal?   @db.Decimal(5, 4)
+  costMs           Int?
+  error            String?
+  createdAt        DateTime   @default(now())
+  updatedAt        DateTime   @updatedAt
+
+  transcripts      Transcript[]
+}
+
+model Transcript {
+  id            String         @id @default(uuid())
+  tenantId      String
+  sessionId     String
+  session       SpeechSession  @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  sttJobId      String?
+  sttJob        SttJob?        @relation(fields: [sttJobId], references: [id])
+  text          String
+  segments      Json?
+  speakerLabels Json?
+  createdAt     DateTime       @default(now())
+}
+
+model TtsJob {
+  id              String      @id @default(uuid())
+  tenantId        String
+  sessionId       String?
+  session         SpeechSession? @relation(fields: [sessionId], references: [id])
+  text            String
+  voiceProfileId  String?
+  model           String?
+  audioStorageKey String?
+  mime            String?
+  durationMs      Int?
+  state           TtsJobState @default(queued)
+  options         Json?
+  costMs          Int?
+  error           String?
+  createdAt       DateTime    @default(now())
+  updatedAt       DateTime    @updatedAt
+}
+
+model SpeechCommand {
+  id                   String             @id @default(uuid())
+  tenantId             String
+  sessionId            String
+  session              SpeechSession      @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  sourceTranscriptId   String?
+  intent               SpeechIntent
+  params               Json?
+  dispatchedRunId      String?
+  state                SpeechCommandState @default(new)
+  confidence           Decimal           @db.Decimal(5, 4)
+  createdAt            DateTime           @default(now())
+}

@@ -1,0 +1,103 @@
+name: kk-os
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-kkos}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-kkos}
+      POSTGRES_DB: ${POSTGRES_DB:-kkos}
+    ports:
+      - "5432:5432"
+    volumes:
+      - ./data/postgres:/var/lib/postgresql/data
+      - ./init/postgres:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-kkos}"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    ports:
+      - "6379:6379"
+    volumes:
+      - ./data/redis:/data
+    command: ["redis-server", "--appendonly", "yes"]
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+  minio:
+    image: minio/minio:latest
+    restart: unless-stopped
+    command: server /data --console-address ":9001"
+    environment:
+      MINIO_ROOT_USER: ${S3_ACCESS_KEY:-minio}
+      MINIO_ROOT_PASSWORD: ${S3_SECRET_KEY:-minio12345}
+    ports:
+      - "9000:9000"
+      - "9001:9001"
+    volumes:
+      - ./data/minio:/data
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9000/minio/health/ready"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+  minio-init:
+    image: minio/mc:latest
+    depends_on:
+      minio:
+        condition: service_healthy
+    entrypoint: >
+      /bin/sh -c "
+      mc alias set local http://minio:9000 ${S3_ACCESS_KEY:-minio} ${S3_SECRET_KEY:-minio12345} &&
+      mc mb -p local/${S3_BUCKET_DOCUMENTS:-kkos-documents} || true &&
+      mc mb -p local/${S3_BUCKET_AUDIO:-kkos-audio} || true &&
+      echo 'buckets ready'
+      "
+
+  mailhog:
+    image: mailhog/mailhog:latest
+    restart: unless-stopped
+    ports:
+      - "1025:1025"   # SMTP
+      - "8025:8025"   # Web UI
+    healthcheck:
+      test: ["CMD", "wget", "-q", "--spider", "http://localhost:8025"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+  # --- Speech sidecars ---------------------------------------------------
+  stt:
+    build:
+      context: ../stt-service
+    image: kkos/stt:dev
+    restart: unless-stopped
+    environment:
+      MODEL: ${SPEECH_STT_MODEL:-large-v3}
+      LANGUAGE: ${SPEECH_STT_LANGUAGE:-de}
+      DEVICE: cpu
+      COMPUTE_TYPE: int8
+    ports:
+      - "9010:9010"
+
+  tts:
+    build:
+      context: ../tts-service
+    image: kkos/tts:dev
+    restart: unless-stopped
+    environment:
+      VOICE_DEFAULT: ${SPEECH_TTS_VOICE_DEFAULT:-de-female-warm}
+    ports:
+      - "9020:9020"
+
+volumes: {}
