@@ -13,6 +13,7 @@
     "seed": "tsx prisma/seed.ts"
   },
   "dependencies": {
+    "@kk/llm": "workspace:*",
     "@kk/shared": "workspace:*",
     "@kk/speech": "workspace:*",
     "@nestjs/common": "^10.3.0",

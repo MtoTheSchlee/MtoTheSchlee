@@ -2,15 +2,19 @@ import { Worker } from 'bullmq';
 import type { AgentDeps, AgentJobInput } from './types.js';
 
 /**
- * SpeechAgent (orchestrator for voice commands).
- * - Consumes speech.stt jobs with already-transcribed text and a sessionId.
- * - Calls the API /speech/commands endpoint which routes intent and
- *   triggers downstream agents. For MVP we just delegate; the logic is
- *   re-used by the web UI that can also call the endpoint directly.
+ * SpeechAgent – handles voice-command routing jobs (speech.command).
+ *
+ * Input:  { sessionId, text } – text comes from the STT service or the
+ *         typed Jarvis bar. No raw audio here; STT stays at the edge
+ *         because binary transport belongs in the HTTP/WS layer, not in
+ *         a durable queue.
+ *
+ * Output: POST /api/speech/commands classifies the intent and triggers
+ *         downstream agents (summaries, discrepancies, social drafts).
  */
 export function registerSpeechAgent(deps: AgentDeps): Worker {
   return new Worker(
-    'speech.stt',
+    'speech.command',
     async (job) => {
       const { input, runId } = job.data as AgentJobInput<{ sessionId: string; text: string }>;
       const result = await deps.api.post('/api/speech/commands', input);

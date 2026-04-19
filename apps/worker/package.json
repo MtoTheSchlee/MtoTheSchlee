@@ -7,9 +7,11 @@
     "dev": "tsx watch src/main.ts",
     "build": "tsc -p tsconfig.json",
     "start": "node dist/main.js",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run"
   },
   "dependencies": {
+    "@kk/llm": "workspace:*",
     "@kk/shared": "workspace:*",
     "@kk/speech": "workspace:*",
     "bullmq": "^5.4.0",
@@ -22,6 +24,7 @@
   "devDependencies": {
     "@types/node": "^20.11.30",
     "tsx": "^4.7.0",
-    "typescript": "^5.4.0"
+    "typescript": "^5.4.0",
+    "vitest": "^1.4.0"
   }
 }

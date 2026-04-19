@@ -1,6 +1,8 @@
 import { Worker } from 'bullmq';
 import type { AgentDeps, AgentJobInput } from './types.js';
 import { classifyEmail } from './mail.classifier.js';
+import { classifyWithLlm } from './mail.classifier.llm.js';
+import { getLlmGateway } from '../llm-factory.js';
 
 /**
  * MailAgent
@@ -24,12 +26,34 @@ export function registerMailAgent(deps: AgentDeps): Worker {
       const logMeta = { agent: 'mail', runId, emailId: input.emailId };
       deps.log.info(logMeta, 'classify');
 
-      const { classification, confidence, reasons } = classifyEmail({
+      const base = classifyEmail({
         subject: input.subject,
         bodyText: input.bodyText ?? '',
         fromAddr: input.fromAddr,
         hasAttachments: input.hasAttachments,
       });
+      let classification = base.classification;
+      let confidence = base.confidence;
+      const reasons: string[] = [...base.reasons];
+
+      // Second pass: LLM with PII redaction for ambiguous cases.
+      if (base.confidence < 0.7 || base.classification === 'unknown') {
+        try {
+          const llm = await classifyWithLlm(getLlmGateway(), {
+            tenantId,
+            subject: input.subject,
+            bodyText: input.bodyText ?? '',
+            fromAddr: input.fromAddr,
+          });
+          if (llm && llm.confidence > confidence) {
+            classification = llm.classification;
+            confidence = llm.confidence;
+            reasons.push(`llm:${llm.rationale}`);
+          }
+        } catch (err) {
+          deps.log.warn({ err: String(err) }, 'llm classify failed – using regex result');
+        }
+      }
 
       await deps.api.patch(`/api/emails/${input.emailId}/classify`, { classification, confidence });
 

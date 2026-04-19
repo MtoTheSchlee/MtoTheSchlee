@@ -31,8 +31,10 @@ apps/
   worker/      – BullMQ worker: Mail, AB, Akte, Termin, Controlling,
                  Social, Speech, Orchestrator
 packages/
-  shared/      – Enums, events, Ampel-Logik, IDs
+  shared/      – Enums, events, Ampel-Logik, IDs, Unit-Tests
   speech/      – Adapter-Schicht für STT, TTS, VoiceClone, CommandRouter
+  llm/         – LLM-Gateway mit PII-Redactor, Provider-Selector,
+                 Budget-Guard (Anthropic, OpenAI, Noop-Fallback)
 infra/
   compose/     – docker-compose.yml (Postgres, Redis, MinIO, MailHog, STT, TTS)
   stt-service/ – faster-whisper FastAPI sidecar
@@ -76,6 +78,17 @@ Offene URLs:
 | TTS-Sidecar | http://localhost:9020 |
 
 Default-Login: `owner@kuechen-klaus.de` / `kkos-dev-pass` (nur lokal).
+
+## Tests
+
+```bash
+# Alle Workspace-Tests (Vitest)
+pnpm -r test
+```
+
+Abgedeckt: Ampel-Logik, AB-Matcher (Kernlogik der AB-Prüfung),
+Mail-Classifier (Regex-Baseline), AB-Parser, Speech-Command-Router
+(Regex + Layered), PII-Redactor.
 
 ## Feature-Flags
 

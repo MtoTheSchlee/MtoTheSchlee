@@ -38,8 +38,24 @@ process.on('SIGTERM', async () => {
 });
 
 log.info({ count: workers.length }, 'KK-OS worker started');
-// Cron: controlling recompute every 15 minutes
+
+// Cron: controlling recompute every 15 minutes.
+// Idempotent jobId per minute window so duplicate emitters don't multiply load.
 const controlling = new Queue('controlling.compute', { connection });
-setInterval(async () => {
-  await controlling.add('cron', { trigger: 'cron' }, { removeOnComplete: 100, removeOnFail: 100 });
+async function emitControllingCron() {
+  const tenantId = process.env.TENANT_DEFAULT_ID ?? '';
+  const slot = Math.floor(Date.now() / (15 * 60 * 1000));
+  await controlling.add(
+    'cron',
+    { tenantId, input: { trigger: 'cron', slot } },
+    {
+      jobId: `controlling:${tenantId}:${slot}`,
+      removeOnComplete: 100,
+      removeOnFail: 100,
+    },
+  );
+}
+emitControllingCron().catch((err) => log.warn({ err }, 'initial controlling emit failed'));
+setInterval(() => {
+  emitControllingCron().catch((err) => log.warn({ err }, 'controlling emit failed'));
 }, 15 * 60 * 1000);

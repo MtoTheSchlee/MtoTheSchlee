@@ -11,7 +11,7 @@ const AGENT_QUEUE: Record<AgentKey, QueueName> = {
   termin: QUEUE_NAMES.APPT_SUGGEST,
   controlling: QUEUE_NAMES.CONTROLLING,
   social: QUEUE_NAMES.SOCIAL_IDEATE,
-  speech: QUEUE_NAMES.SPEECH_STT,
+  speech: QUEUE_NAMES.SPEECH_COMMAND,
   orchestrator: QUEUE_NAMES.ORCHESTRATOR,
 };
 

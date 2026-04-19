@@ -3,6 +3,7 @@ import { buildSpeechServices, type SpeechServices } from '@kk/speech';
 import { PrismaService } from '../prisma/prisma.service.js';
 import { RealtimeGateway } from '../realtime/realtime.gateway.js';
 import { AuditService } from '../common/audit.service.js';
+import { VoiceProfilesService } from './voice-profiles.service.js';
 
 @Injectable()
 export class SpeechService {
@@ -13,6 +14,7 @@ export class SpeechService {
     private readonly prisma: PrismaService,
     private readonly rt: RealtimeGateway,
     private readonly audit: AuditService,
+    private readonly voiceProfiles: VoiceProfilesService,
   ) {
     this.services = buildSpeechServices({
       stt: {
@@ -122,15 +124,17 @@ export class SpeechService {
     tenantId: string,
     input: { text: string; voice?: string; sessionId?: string; voiceProfileId?: string; watermark?: boolean; mfaVerified?: boolean },
   ) {
-    // Guard: voice cloning requires feature flag + MFA; enforced here too,
-    // defense in depth against callers skipping the facade.
+    // Guard: voice cloning routes through the policy service which checks
+    // feature flag, MFA, profile state and emits the audit trail (ADR-003).
     if (input.voiceProfileId) {
-      if (process.env.FEATURE_VOICE_CLONE !== 'true') {
-        throw new Error('FEATURE_VOICE_CLONE disabled');
-      }
-      if (!input.mfaVerified) {
-        throw new Error('MFA required for voice-cloned synthesis');
-      }
+      await this.voiceProfiles.assertUsable(tenantId, input.voiceProfileId, Boolean(input.mfaVerified));
+      await this.audit.record({
+        tenantId,
+        action: 'voice_profile.use',
+        entity: 'VoiceProfile',
+        entityId: input.voiceProfileId,
+        after: { sessionId: input.sessionId, textLength: input.text.length },
+      });
     }
 
     const job = await this.prisma.ttsJob.create({

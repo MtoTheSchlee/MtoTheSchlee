@@ -13,6 +13,7 @@ export const QUEUE_NAMES = {
   SOCIAL_IDEATE: 'social.ideate',
   SPEECH_STT: 'speech.stt',
   SPEECH_TTS: 'speech.tts',
+  SPEECH_COMMAND: 'speech.command',
   ORCHESTRATOR: 'orchestrator.plan',
 } as const;
 export type QueueName = (typeof QUEUE_NAMES)[keyof typeof QUEUE_NAMES];
