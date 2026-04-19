@@ -1,5 +1,5 @@
-import pino from 'pino';
-import IORedis from 'ioredis';
+import { pino } from 'pino';
+import { Redis as IORedis } from 'ioredis';
 import { Worker, Queue } from 'bullmq';
 import { ApiClient } from './api-client.js';
 import { registerMailAgent } from './agents/mail.agent.js';

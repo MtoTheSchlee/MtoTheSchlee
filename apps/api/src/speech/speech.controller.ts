@@ -25,7 +25,7 @@ export class SpeechController {
     const sessionId = (req.headers['x-session-id'] as string) || undefined;
     const chunks: Buffer[] = [];
     await new Promise<void>((resolve, reject) => {
-      req.on('data', (c) => chunks.push(Buffer.from(c)));
+      req.on('data', (c: Buffer | string) => chunks.push(Buffer.from(c)));
       req.on('end', resolve);
       req.on('error', reject);
     });

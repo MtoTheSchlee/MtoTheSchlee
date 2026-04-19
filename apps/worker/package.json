@@ -22,6 +22,7 @@
     "undici": "^6.14.1"
   },
   "devDependencies": {
+    "@types/mailparser": "^3.4.4",
     "@types/node": "^20.11.30",
     "tsx": "^4.7.0",
     "typescript": "^5.4.0",

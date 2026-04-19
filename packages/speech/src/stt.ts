@@ -1,4 +1,4 @@
-import { request } from 'undici';
+import { FormData as UndiciFormData, request } from 'undici';
 import type { SttRequest, SttResult } from './types.js';
 
 export interface SpeechToTextService {
@@ -25,8 +25,13 @@ export class FasterWhisperSttAdapter implements SpeechToTextService {
   }
 
   async transcribe(req: SttRequest): Promise<SttResult> {
-    const fd = new FormData();
-    const blob = new Blob([req.audio], { type: req.mimeType });
+    const fd = new UndiciFormData();
+    // Copy into a fresh Uint8Array so the Blob constructor's typing accepts it
+    // regardless of whether the caller handed us a Node Buffer or a Uint8Array
+    // (Buffer is a Uint8Array subclass but its typing fights DOM BlobPart).
+    const bytes = new Uint8Array(req.audio.byteLength);
+    bytes.set(req.audio as Uint8Array);
+    const blob = new Blob([bytes], { type: req.mimeType });
     fd.set('file', blob, 'audio.bin');
     if (req.language ?? this.opts.defaultLanguage) {
       fd.set('language', req.language ?? this.opts.defaultLanguage!);

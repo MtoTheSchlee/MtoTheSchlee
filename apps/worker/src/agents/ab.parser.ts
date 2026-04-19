@@ -29,7 +29,11 @@ export interface ParsedAb {
 
 const POS_LINE =
   /^\s*(?<pos>\d{1,4})[\s\.\)]+(?<qty>\d+(?:[.,]\d+)?)\s*(?<unit>Stk|Stck|m|m²|m2|Paar|Set)?\s*(?<desc>.+?)\s+(?<price>\d+(?:[.,]\d{2})?)\s*(?:€|EUR)?\s*$/i;
-const AB_NR = /(?:AB[- ]?Nr\.?|Auftragsbest[äa]tigung(?:snummer)?)\s*[:#]?\s*([A-Z0-9\-\/]+)/i;
+// Capture must include at least one digit so the regex doesn't latch onto
+// the subject line "Auftragsbestätigung" and grab the literal "AB-Nr" as
+// its order number.
+const AB_NR =
+  /(?:AB[- ]?Nr\.?|Auftragsbest[äa]tigung(?:snummer)?)\s*[:#]?\s*([A-Z0-9\-\/]*\d[A-Z0-9\-\/]*)/i;
 const ISO_DATE = /(\d{1,2})[.\/](\d{1,2})[.\/](\d{2,4})/;
 
 export function parseAbBasic(input: { subject: string; body: string }): ParsedAb {

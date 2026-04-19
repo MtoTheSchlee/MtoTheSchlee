@@ -24,13 +24,16 @@ interface Rule {
 }
 
 const RULES: Rule[] = [
-  { tag: 'EMAIL', re: /[\w.+-]+@[\w-]+\.[\w.-]+/g },
-  // +49 170 1234567, 0170/123-4567, 089 123 456
-  { tag: 'PHONE', re: /(?:\+?\d{1,3}[\s\-/]?)?(?:\(?\d{2,5}\)?[\s\-/]?){2,}\d{2,}/g },
+  // Order is significant: specific patterns go first so generic ones
+  // (notably PHONE, which is intentionally permissive) cannot consume
+  // substrings of IBANs or project codes.
+  { tag: 'ORDERNO', re: /\b(?:KK-\d{4}-\d{3,4}|KK-ORD-\d{3,6})\b/g },
   { tag: 'IBAN', re: /\b[A-Z]{2}\d{2}(?:\s?\d){12,30}\b/g },
+  { tag: 'EMAIL', re: /[\w.+-]+@[\w-]+\.[\w.-]+/g },
+  // German phone numbers: require a leading + or 0 so we don't eat order codes.
+  { tag: 'PHONE', re: /(?:\+\d{1,3}[\s\-/]?|\b0)(?:\(?\d{2,5}\)?[\s\-/]?){2,}\d{2,}/g },
   // Rough German street: "Musterstraße 12", "Am Hang 4a"
   { tag: 'STREET', re: /\b[A-ZÄÖÜ][a-zäöüß\-]{2,}(?:stra(?:ß|ss)e|str\.|weg|platz|ring|gasse)\s+\d{1,4}[a-zA-Z]?\b/g },
-  { tag: 'ORDERNO', re: /\b(?:KK-\d{4}-\d{3,4}|KK-ORD-\d{3,6})\b/g },
 ];
 
 export function redactPii(input: string): RedactResult {

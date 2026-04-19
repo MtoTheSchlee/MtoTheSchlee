@@ -1,9 +1,9 @@
 import type { Logger } from 'pino';
-import type IORedis from 'ioredis';
+import type { Redis } from 'ioredis';
 import type { ApiClient } from '../api-client.js';
 
 export interface AgentDeps {
-  readonly connection: IORedis;
+  readonly connection: Redis;
   readonly api: ApiClient;
   readonly log: Logger;
 }

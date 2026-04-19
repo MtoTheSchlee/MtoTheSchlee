@@ -108,23 +108,27 @@ export class AbMatcher {
           : 0;
       const dDays = dayDelta(target.requestedDeliveryAt ?? null, ab.confirmedDeliveryAt ?? null);
 
-      if (qtyRel > tolerances.qtyRelYellow) qtyDeltas.push(qtyRel);
-      if (priceRel > tolerances.priceRelYellow) priceDeltas.push(priceRel);
-      if (dDays >= tolerances.dateDaysYellow) dateDeltas.push(dDays);
+      // Record every observable deviation. Thresholds are applied once,
+      // by evaluateAmpel, to keep matcher + Ampel logic in sync (both
+      // use >=).
+      if (qtyRel > 0) qtyDeltas.push(qtyRel);
+      if (priceRel > 0) priceDeltas.push(priceRel);
+      if (dDays > 0) dateDeltas.push(dDays);
 
-      if (
-        qtyRel > tolerances.qtyRelYellow ||
-        priceRel > tolerances.priceRelYellow ||
-        dDays >= tolerances.dateDaysYellow
-      ) {
+      const deviates =
+        (qtyRel > 0 && qtyRel >= tolerances.qtyRelYellow) ||
+        priceRel >= tolerances.priceRelYellow ||
+        dDays >= tolerances.dateDaysYellow;
+
+      if (deviates) {
         const kind = classifyDeviation({
           qtyRel,
           priceRel,
           dateDays: dDays,
         });
         const severity =
-          qtyRel > tolerances.qtyRelRed ||
-          priceRel > tolerances.priceRelRed ||
+          qtyRel >= tolerances.qtyRelRed ||
+          priceRel >= tolerances.priceRelRed ||
           dDays >= tolerances.dateDaysRed
             ? 'high'
             : qtyRel > 0 || priceRel > 0 || dDays > 0
