@@ -1,0 +1,6 @@
+fastapi==0.110.0
+uvicorn[standard]==0.29.0
+numpy==1.26.4
+soundfile==0.12.1
+# chatterbox-multilingual is pulled on first run; pin when stable.
+# Keep this list minimal so local dev stays fast even without GPU.

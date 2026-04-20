@@ -1,0 +1,29 @@
+node_modules
+dist
+.next
+.turbo
+.cache
+coverage
+*.log
+.DS_Store
+
+# playwright artifacts
+apps/web/test-results/
+apps/web/playwright-report/
+
+# quickstart runtime logs
+.runtime/
+
+# env
+.env
+.env.local
+.env.*.local
+
+# docker volumes / local data
+infra/compose/data/
+
+# prisma
+apps/api/prisma/.cache/
+
+# build artefacts
+*.tsbuildinfo

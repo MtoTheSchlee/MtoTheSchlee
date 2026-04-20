@@ -1,0 +1,103 @@
+name: CI
+
+on:
+  push:
+    branches: [main, 'claude/**']
+  pull_request:
+    branches: [main]
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    name: Typecheck + Tests
+    runs-on: ubuntu-latest
+
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: kkos
+          POSTGRES_PASSWORD: kkos
+          POSTGRES_DB: kkos
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd="pg_isready -U kkos"
+          --health-interval=5s
+          --health-timeout=3s
+          --health-retries=20
+
+    env:
+      DATABASE_URL: postgresql://kkos:kkos@localhost:5432/kkos?schema=public
+      REDIS_URL: redis://localhost:6379
+      TENANT_DEFAULT_ID: 00000000-0000-0000-0000-000000000001
+      TENANT_DEFAULT_NAME: "Küchen Klaus"
+      JWT_ACCESS_SECRET: ci-access
+      JWT_REFRESH_SECRET: ci-refresh
+      LLM_PROVIDER: noop
+      FEATURE_VOICE: 'false'
+      FEATURE_VOICE_CLONE: 'false'
+      NEXT_PUBLIC_API_URL: http://localhost:4000
+      NEXT_PUBLIC_TENANT_ID: 00000000-0000-0000-0000-000000000001
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Enable pnpm
+        uses: pnpm/action-setup@v3
+        with:
+          version: 9.0.0
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: pnpm
+
+      - name: Install deps
+        run: pnpm install --frozen-lockfile
+
+      - name: Build shared packages
+        run: pnpm --filter @kk/shared --filter @kk/speech --filter @kk/llm build
+
+      - name: Prisma generate + migrate
+        run: |
+          pnpm --filter @kk/api exec prisma generate
+          pnpm --filter @kk/api exec prisma migrate deploy
+
+      - name: Typecheck API
+        run: pnpm --filter @kk/api exec nest build
+
+      - name: Typecheck worker
+        run: pnpm --filter @kk/worker build
+
+      - name: Typecheck web
+        run: pnpm --filter @kk/web exec tsc --noEmit
+
+      - name: Unit tests
+        run: pnpm -r test
+
+      - name: Seed demo data
+        run: |
+          pnpm --filter @kk/api exec tsx prisma/seed.ts
+          pnpm --filter @kk/api exec tsx ../../scripts/demo-fixtures.ts
+
+      - name: Build web
+        run: pnpm --filter @kk/web build
+
+      - name: Start API + web and run E2E
+        run: |
+          pnpm --filter @kk/api exec node dist/src/main.js &
+          API_PID=$!
+          pnpm --filter @kk/web exec next start -p 3000 &
+          WEB_PID=$!
+          # Wait for both to respond before running tests.
+          for i in $(seq 1 30); do
+            curl -sf http://localhost:4000/api/healthz && curl -sf http://localhost:3000/ && break
+            sleep 1
+          done
+          pnpm --filter @kk/web exec playwright install chromium
+          pnpm --filter @kk/web exec playwright test
+          kill $API_PID $WEB_PID || true
