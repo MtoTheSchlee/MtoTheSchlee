@@ -2,6 +2,7 @@ import { Body, Controller, Get, Param, Post, Req } from '@nestjs/common';
 import type { Request } from 'express';
 import { IsIn, IsOptional, IsString } from 'class-validator';
 import { TenantId } from '../common/tenant.decorator.js';
+import { Roles } from '../common/roles.decorator.js';
 import { VoiceProfilesService } from './voice-profiles.service.js';
 
 class CreateProfileDto {
@@ -33,21 +34,25 @@ function actorFromRequest(req: Request) {
 export class VoiceProfilesController {
   constructor(private readonly svc: VoiceProfilesService) {}
 
+  @Roles('voice_operator', 'owner')
   @Get()
   list(@TenantId() t: string) {
     return this.svc.list(t);
   }
 
+  @Roles('voice_operator', 'owner')
   @Post()
   create(@TenantId() t: string, @Req() req: Request, @Body() dto: CreateProfileDto) {
     return this.svc.create(t, actorFromRequest(req), dto);
   }
 
+  @Roles('voice_operator', 'owner')
   @Post(':id/activate')
   activate(@TenantId() t: string, @Req() req: Request, @Param('id') id: string) {
     return this.svc.activate(t, id, actorFromRequest(req));
   }
 
+  @Roles('voice_operator', 'owner')
   @Post(':id/revoke')
   revoke(@TenantId() t: string, @Req() req: Request, @Param('id') id: string, @Body() dto: RevokeDto) {
     return this.svc.revoke(t, id, dto.reason, actorFromRequest(req));

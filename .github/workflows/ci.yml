@@ -1,0 +1,77 @@
+name: CI
+
+on:
+  push:
+    branches: [main, 'claude/**']
+  pull_request:
+    branches: [main]
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    name: Typecheck + Tests
+    runs-on: ubuntu-latest
+
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: kkos
+          POSTGRES_PASSWORD: kkos
+          POSTGRES_DB: kkos
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd="pg_isready -U kkos"
+          --health-interval=5s
+          --health-timeout=3s
+          --health-retries=20
+
+    env:
+      DATABASE_URL: postgresql://kkos:kkos@localhost:5432/kkos?schema=public
+      REDIS_URL: redis://localhost:6379
+      TENANT_DEFAULT_ID: 00000000-0000-0000-0000-000000000001
+      JWT_ACCESS_SECRET: ci-access
+      JWT_REFRESH_SECRET: ci-refresh
+      LLM_PROVIDER: noop
+      FEATURE_VOICE: 'false'
+      FEATURE_VOICE_CLONE: 'false'
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Enable pnpm
+        uses: pnpm/action-setup@v3
+        with:
+          version: 9.0.0
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: pnpm
+
+      - name: Install deps
+        run: pnpm install --frozen-lockfile
+
+      - name: Build shared packages
+        run: pnpm --filter @kk/shared --filter @kk/speech --filter @kk/llm build
+
+      - name: Prisma generate + migrate
+        run: |
+          pnpm --filter @kk/api exec prisma generate
+          pnpm --filter @kk/api exec prisma migrate deploy
+
+      - name: Typecheck API
+        run: pnpm --filter @kk/api exec nest build
+
+      - name: Typecheck worker
+        run: pnpm --filter @kk/worker build
+
+      - name: Typecheck web
+        run: pnpm --filter @kk/web exec tsc --noEmit
+
+      - name: Unit tests
+        run: pnpm -r test

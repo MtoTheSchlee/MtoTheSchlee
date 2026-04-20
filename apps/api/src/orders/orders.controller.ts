@@ -1,5 +1,6 @@
 import { Body, Controller, Get, Param, Post, Query } from '@nestjs/common';
 import { TenantId } from '../common/tenant.decorator.js';
+import { Roles } from '../common/roles.decorator.js';
 import { OrdersService } from './orders.service.js';
 
 @Controller('orders')
@@ -12,6 +13,7 @@ export class OrdersController {
   @Get(':id') one(@TenantId() t: string, @Param('id') id: string) {
     return this.svc.one(t, id);
   }
+  @Roles('purchaser', 'owner')
   @Post() create(@TenantId() t: string, @Body() dto: any) {
     return this.svc.create(t, dto);
   }

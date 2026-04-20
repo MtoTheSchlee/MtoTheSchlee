@@ -12,7 +12,15 @@ export class ApiClient {
   ) {}
 
   private headers(extra: Record<string, string> = {}) {
-    return { 'content-type': 'application/json', 'x-tenant-id': this.tenantId, ...extra };
+    // Worker acts as the `agent` role. AuthGuard accepts this via the
+    // x-service-role header when AUTH_ALLOW_SERVICE_HEADER is on; in
+    // production this is replaced with a real service token.
+    return {
+      'content-type': 'application/json',
+      'x-tenant-id': this.tenantId,
+      'x-service-role': 'agent',
+      ...extra,
+    };
   }
 
   async post<T>(path: string, body: unknown): Promise<T> {

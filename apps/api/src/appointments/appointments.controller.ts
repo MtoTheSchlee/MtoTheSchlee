@@ -1,5 +1,6 @@
 import { Body, Controller, Get, Param, Post, Query } from '@nestjs/common';
 import { TenantId } from '../common/tenant.decorator.js';
+import { Roles } from '../common/roles.decorator.js';
 import { AppointmentsService } from './appointments.service.js';
 
 @Controller('appointments')
@@ -19,6 +20,7 @@ export class AppointmentsController {
     });
   }
 
+  @Roles('planner', 'installer', 'owner')
   @Post() create(@TenantId() t: string, @Body() dto: any) {
     return this.svc.create(t, dto);
   }
@@ -28,11 +30,13 @@ export class AppointmentsController {
     return this.svc.suggestions(t, state ?? 'new');
   }
 
+  @Roles('agent', 'planner', 'owner')
   @Post('suggestions')
   propose(@TenantId() t: string, @Body() dto: any) {
     return this.svc.proposeFromEmail(t, dto);
   }
 
+  @Roles('planner', 'owner')
   @Post('suggestions/:id/accept')
   accept(@TenantId() t: string, @Param('id') id: string) {
     return this.svc.acceptSuggestion(t, id);
