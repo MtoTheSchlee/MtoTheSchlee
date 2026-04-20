@@ -32,7 +32,11 @@ EOF
   STEP "3) shared packages"
   pnpm --filter @kk/shared --filter @kk/speech --filter @kk/llm build
 
-  STEP "4) prisma migrate"
+  STEP "4) prisma generate + migrate"
+  # `generate` is explicit so a second run (or an empty migrate) still
+  # produces the client. `migrate deploy` only triggers generate when
+  # there are pending migrations, which bites you on the second install.
+  pnpm --filter @kk/api exec prisma generate
   pnpm --filter @kk/api exec prisma migrate deploy
 
   STEP "5) seed + demo fixtures"
