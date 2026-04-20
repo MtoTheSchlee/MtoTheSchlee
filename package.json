@@ -25,9 +25,10 @@
     "compose:logs": "docker compose -f infra/compose/docker-compose.yml logs -f"
   },
   "devDependencies": {
-    "typescript": "^5.4.0",
-    "tsx": "^4.7.0",
+    "eslint": "^8.57.0",
+    "playwright": "^1.59.1",
     "prettier": "^3.2.5",
-    "eslint": "^8.57.0"
+    "tsx": "^4.7.0",
+    "typescript": "^5.4.0"
   }
 }
