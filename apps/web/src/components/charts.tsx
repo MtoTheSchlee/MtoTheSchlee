@@ -24,12 +24,19 @@ export function StackedBars({
 }) {
   const sums = series.map((s) => s.segments.reduce((a, b) => a + b.value, 0));
   const top = max ?? Math.max(1, ...sums);
-  const barGap = 12;
-  const barW = 40;
+  const barGap = 16;
+  const barW = 56;
   const width = series.length * (barW + barGap) + barGap;
+  const totalHeight = height + 32;
 
   return (
-    <svg viewBox={`0 0 ${width} ${height + 28}`} className="w-full" role="img">
+    <svg
+      viewBox={`0 0 ${width} ${totalHeight}`}
+      width={width}
+      height={totalHeight}
+      preserveAspectRatio="xMinYMin meet"
+      role="img"
+    >
       {series.map((s, i) => {
         const total = sums[i] ?? 0;
         let yCursor = height;
@@ -58,16 +65,17 @@ export function StackedBars({
               x={x + barW / 2}
               y={height + 14}
               textAnchor="middle"
-              className="fill-current text-[10px]"
+              fontSize={11}
               style={{ fill: 'currentColor' }}
             >
               {s.label}
             </text>
             <text
               x={x + barW / 2}
-              y={height + 26}
+              y={height + 28}
               textAnchor="middle"
-              className="fill-current text-[10px] opacity-60"
+              fontSize={10}
+              opacity={0.6}
               style={{ fill: 'currentColor' }}
             >
               {valueFormat(total)}

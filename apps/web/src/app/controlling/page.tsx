@@ -9,6 +9,7 @@ interface Snapshot {
   toReviewDocs: number;
   toReviewEmails?: number;
   toReviewSuggestions?: number;
+  toReviewTotal?: number;
   openCards: number;
   projectsInExec: number;
 }
@@ -54,7 +55,7 @@ export default function ControllingPage() {
       <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-3">
         <Kpi label="offene Abweichungen" value={snap.data?.openDiscrepancies ?? '—'} />
         <Kpi label="kritisch rot" value={snap.data?.redDiscrepancies ?? '—'} tone="danger" />
-        <Kpi label="zu prüfen" value={snap.data?.toReviewDocs ?? '—'} tone="warn" />
+        <Kpi label="zu prüfen" value={snap.data?.toReviewTotal ?? snap.data?.toReviewDocs ?? '—'} tone="warn" />
         <Kpi label="offene Karten" value={snap.data?.openCards ?? '—'} />
         <Kpi label="in Ausführung" value={snap.data?.projectsInExec ?? '—'} />
         <Kpi
