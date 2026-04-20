@@ -84,6 +84,9 @@ Default-Login: `owner@kuechen-klaus.de` / `kkos-dev-pass` (nur lokal).
 ```bash
 # Alle Workspace-Tests (Vitest)
 pnpm -r test
+
+# End-to-End gegen laufenden Stack (Playwright + Chromium)
+pnpm --filter @kk/web test:e2e
 ```
 
 Abgedeckt: Ampel-Logik, AB-Matcher (Kernlogik der AB-Prüfung),
@@ -123,6 +126,39 @@ Idempotenz pro `(tenantId, agent, triggerRef)` über SHA-256-Key.
   `TextToSpeechService`, `VoiceCloneService`, `VoiceCommandRouter`.
 - Backend-Wechsel rein per ENV (`SPEECH_STT_BACKEND`, `SPEECH_TTS_BACKEND`).
 - Voice Clone: ADR-003 – Opt-in, MFA, Watermark, Auditpflicht.
+- **Audio-Capture im Browser**: Voice-Bar im Footer (MediaRecorder →
+  `/api/speech/transcribe`). Degradiert sauber, wenn das STT-Sidecar
+  offline ist — die Tastatur-Eingabe bleibt nutzbar.
+
+## AB-Pipeline
+
+Zwei Wege, aus einer Auftragsbestätigung eine Ampel zu machen:
+
+1. **Drag&Drop** eines PDF auf `/ab` → API extrahiert Text mit
+   pdfjs-dist, `parseAbBasic` (shared) liefert Positionen, `AbMatcher`
+   vergleicht mit der Bestellung, Discrepancies landen als Karten im
+   Board.
+2. **Automatisch aus E-Mails**: Klassifikator setzt `ab`, Worker-Agent
+   lädt die PDF-Anhänge über `/api/emails/:id/attachments/:aid/download`
+   und delegiert an `/api/ab/from-email/:emailId` — exakt derselbe Pfad
+   wie beim manuellen Upload.
+
+Ohne MinIO läuft der Flow mit Filesystem-Storage (`STORAGE_BACKEND=fs`).
+
+## Row-Level-Security (optional)
+
+`prisma/migrations/20260420210000_optional_rls` legt Policies an, ohne
+RLS zu erzwingen. Produktionsaktivierung in zwei Schritten:
+
+```bash
+# 1. Policies sind bereits nach `prisma migrate deploy` da.
+# 2. RLS scharfschalten (läuft als DB-Owner):
+psql "$DATABASE_URL" -f scripts/enable-rls.sql
+
+# 3. API + Worker auf die kkos_app-Rolle umstellen und
+#    ENABLE_RLS=true setzen. Die TenantMiddleware schreibt
+#    app.current_tenant pro Request.
+```
 
 ## Serverbetrieb
 

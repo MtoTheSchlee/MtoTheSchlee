@@ -1,13 +1,57 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service.js';
 import { RealtimeGateway } from '../realtime/realtime.gateway.js';
+import { StorageService } from '../documents/storage.service.js';
 
 @Injectable()
 export class EmailsService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly rt: RealtimeGateway,
+    private readonly storage: StorageService,
   ) {}
+
+  /**
+   * Load an email attachment back as bytes. Used by the worker to feed
+   * AB PDFs into the upload pipeline. Tenant-scoped so cross-tenant
+   * requests can't reach another mandant's blob store.
+   */
+  async loadAttachment(tenantId: string, emailId: string, attachmentId: string) {
+    const att = await this.prisma.emailAttachment.findFirst({
+      where: { id: attachmentId, email: { id: emailId, tenantId } },
+    });
+    if (!att) throw new NotFoundException('attachment not found');
+    const [bucket, ...rest] = att.storageKey.split('/');
+    const key = rest.join('/');
+    if (!bucket) throw new NotFoundException('malformed storageKey');
+    const buffer = await this.storage.read(bucket, key);
+    if (!buffer) throw new NotFoundException('attachment body missing');
+    return { attachment: att, buffer };
+  }
+
+  /** Store a new attachment body (used by demo fixtures and worker tests). */
+  async putAttachmentBody(
+    tenantId: string,
+    emailId: string,
+    filename: string,
+    mime: string,
+    body: Buffer,
+  ) {
+    const email = await this.prisma.email.findFirst({ where: { id: emailId, tenantId } });
+    if (!email) throw new NotFoundException('email not found');
+    const bucket = process.env.S3_BUCKET_DOCUMENTS ?? 'kkos-documents';
+    const key = `${tenantId}/email/${emailId}/${Date.now()}-${filename.replace(/[^\w.\-]+/g, '_')}`;
+    const { storageKey } = await this.storage.put(bucket, key, body, mime);
+    return this.prisma.emailAttachment.create({
+      data: {
+        emailId,
+        filename,
+        mime,
+        sizeBytes: body.length,
+        storageKey,
+      },
+    });
+  }
 
   list(tenantId: string, filter?: { classification?: string; status?: string; q?: string }) {
     return this.prisma.email.findMany({

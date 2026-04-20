@@ -1,4 +1,4 @@
-import { BadRequestException, Injectable, Logger } from '@nestjs/common';
+import { BadRequestException, Injectable, Logger, NotFoundException } from '@nestjs/common';
 import { parseAbBasic } from '@kk/shared';
 import { PrismaService } from '../prisma/prisma.service.js';
 import { DocumentsService } from '../documents/documents.service.js';
@@ -44,6 +44,38 @@ export class AbUploadService {
     private readonly pdf: PdfExtractorService,
     private readonly ab: AbService,
   ) {}
+
+  /**
+   * Auto-ingest every PDF attachment on an email through the upload
+   * pipeline. Used by the AB agent to turn a classified AB mail into an
+   * AmpelL result without any human click. Non-PDF attachments are
+   * ignored.
+   */
+  async handleEmailAttachments(
+    tenantId: string,
+    emailId: string,
+    deps: { loadAttachment: (attachmentId: string) => Promise<{ filename: string; mime: string; body: Buffer }> },
+  ): Promise<AbUploadResult[]> {
+    const email = await this.prisma.email.findFirst({
+      where: { id: emailId, tenantId },
+      include: { attachments: true },
+    });
+    if (!email) throw new NotFoundException('email not found');
+    const results: AbUploadResult[] = [];
+    for (const att of email.attachments) {
+      if ((att.mime ?? '').toLowerCase() !== 'application/pdf') continue;
+      const blob = await deps.loadAttachment(att.id);
+      const result = await this.handle(tenantId, {
+        filename: blob.filename,
+        mime: blob.mime,
+        body: blob.body,
+        projectId: email.projectId ?? undefined,
+        supplierId: email.supplierId ?? undefined,
+      });
+      results.push(result);
+    }
+    return results;
+  }
 
   async handle(tenantId: string, input: AbUploadInput): Promise<AbUploadResult> {
     if (input.mime !== 'application/pdf') {

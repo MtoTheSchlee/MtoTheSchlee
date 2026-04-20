@@ -18,12 +18,14 @@ import { TenantId } from '../common/tenant.decorator.js';
 import { Roles } from '../common/roles.decorator.js';
 import { AbService } from './ab.service.js';
 import { AbUploadService } from './ab-upload.service.js';
+import { EmailsService } from '../emails/emails.service.js';
 
 @Controller('ab')
 export class AbController {
   constructor(
     private readonly svc: AbService,
     private readonly uploads: AbUploadService,
+    private readonly emails: EmailsService,
   ) {}
 
   @Get()
@@ -63,6 +65,25 @@ export class AbController {
       projectId: body?.projectId,
       supplierId: body?.supplierId,
       orderId: body?.orderId,
+    });
+  }
+
+  /**
+   * Ingest all PDF attachments on an email through the AB pipeline.
+   * Called by the worker's AB agent once the mail classifier says "ab".
+   */
+  @Roles('agent', 'purchaser', 'owner')
+  @Post('from-email/:emailId')
+  async fromEmail(@TenantId() tenantId: string, @Param('emailId') emailId: string) {
+    return this.uploads.handleEmailAttachments(tenantId, emailId, {
+      loadAttachment: async (attachmentId) => {
+        const { attachment, buffer } = await this.emails.loadAttachment(
+          tenantId,
+          emailId,
+          attachmentId,
+        );
+        return { filename: attachment.filename, mime: attachment.mime, body: buffer };
+      },
     });
   }
 

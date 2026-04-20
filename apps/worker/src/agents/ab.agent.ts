@@ -5,26 +5,34 @@ import { parseAbBasic } from './ab.parser.js';
 /**
  * ABAgent
  * - Consumes ab.extract jobs.
- * - For MVP it uses a regex-based text parser on the email body. PDF
- *   parsing is a follow-up (tika/pdfplumber sidecar) – the adapter point
- *   is `parseAbBasic` so it can be swapped without touching the agent.
- * - Output: POST /api/ab/ingest – API runs the matcher + creates
- *   discrepancies, returns a Board-Card-ready payload.
+ * - Path A (preferred): if the email has PDF attachments, delegate to
+ *   POST /api/ab/from-email/:emailId which loads each PDF and runs the
+ *   full pdfjs -> parse -> match -> discrepancy pipeline server-side.
+ * - Path B (fallback): regex-based parse over the plain-text body.
+ *   Still useful for legacy emails that include the positions inline.
  */
 export function registerAbAgent(deps: AgentDeps): Worker {
   return new Worker(
     'ab.extract',
     async (job) => {
-      const { tenantId, input, runId } = job.data as AgentJobInput<{ emailId: string }>;
+      const { input, runId } = job.data as AgentJobInput<{ emailId: string }>;
       deps.log.info({ agent: 'ab', emailId: input.emailId }, 'extract start');
 
-      // 1) Load email
       const email = (await deps.api.get(`/api/emails/${input.emailId}`)) as any;
       if (!email) throw new Error(`email ${input.emailId} not found`);
 
-      // 2) Resolve supplier / project from linked fields or body heuristics.
-      //    (Real heuristics live in kundenakte.agent; here we assume email
-      //    already has supplierId + projectId if auto-assign worked.)
+      const pdfs = (email.attachments ?? []).filter(
+        (a: any) => (a.mime ?? '').toLowerCase() === 'application/pdf',
+      );
+      if (pdfs.length > 0) {
+        const results = await deps.api.post(`/api/ab/from-email/${email.id}`, {});
+        if (runId) {
+          await deps.api.event(runId, 'tool_result', { pdfs: pdfs.length, results });
+          await deps.api.markRun(runId, 'succeeded', { output: { pdfs: pdfs.length, results } });
+        }
+        return { pdfs: pdfs.length, results };
+      }
+
       const supplierId = email.supplierId ?? (await resolveFallbackSupplier(deps, email));
       const projectId = email.projectId ?? (await resolveFallbackProject(deps, email));
       if (!supplierId || !projectId) {
@@ -33,16 +41,16 @@ export function registerAbAgent(deps: AgentDeps): Worker {
         return { skipped: true };
       }
 
-      // 3) Find candidate order by order number in text, else latest open.
-      const orderId = await pickCandidateOrder(deps, { projectId, supplierId, text: email.bodyText ?? '' });
-
-      // 4) Parse AB positions.
+      const orderId = await pickCandidateOrder(deps, {
+        projectId,
+        supplierId,
+        text: email.bodyText ?? '',
+      });
       const parsed = parseAbBasic({
         subject: email.subject ?? '',
         body: email.bodyText ?? '',
       });
 
-      // 5) Push to API for matching + persistence.
       const result = await deps.api.post('/api/ab/ingest', {
         projectId,
         supplierId,

@@ -1,8 +1,9 @@
-import { Module } from '@nestjs/common';
+import { MiddlewareConsumer, Module, NestModule } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
 import { PrismaModule } from './prisma/prisma.module.js';
 import { CommonModule } from './common/common.module.js';
 import { HealthController } from './health/health.controller.js';
+import { TenantMiddleware } from './common/tenant.middleware.js';
 import { AuthModule } from './auth/auth.module.js';
 import { CustomersModule } from './customers/customers.module.js';
 import { ProjectsModule } from './projects/projects.module.js';
@@ -43,5 +44,10 @@ import { RealtimeModule } from './realtime/realtime.module.js';
     SearchModule,
   ],
   controllers: [HealthController],
+  providers: [TenantMiddleware],
 })
-export class AppModule {}
+export class AppModule implements NestModule {
+  configure(consumer: MiddlewareConsumer) {
+    consumer.apply(TenantMiddleware).forRoutes('*');
+  }
+}
