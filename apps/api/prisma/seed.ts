@@ -6,10 +6,14 @@
  * - Creates the Operations board with standard lists.
  * - Creates one example supplier + customer + project so the UI has data.
  */
-import { PrismaClient, Role } from '@prisma/client';
+import { PrismaClient } from '@prisma/client';
 import * as argon2 from 'argon2';
 
 const prisma = new PrismaClient();
+
+// Prisma 5.22+ stopped exporting enums as top-level named members. Prisma
+// accepts the underlying string literals for enum fields, so we use them
+// directly — no dependency on the runtime enum object.
 
 async function main() {
   const tenantId = process.env.TENANT_DEFAULT_ID ?? '00000000-0000-0000-0000-000000000001';
@@ -32,7 +36,13 @@ async function main() {
       name: 'Inhaber',
       passwordHash,
       mfaEnabled: false,
-      roles: { create: [{ role: Role.owner }, { role: Role.planner }, { role: Role.purchaser }] },
+      roles: {
+        create: [
+          { role: 'owner' as const },
+          { role: 'planner' as const },
+          { role: 'purchaser' as const },
+        ],
+      },
     },
   });
 

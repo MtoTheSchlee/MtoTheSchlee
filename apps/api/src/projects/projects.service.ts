@@ -1,5 +1,5 @@
 import { Injectable } from '@nestjs/common';
-import { ProjectStage } from '@prisma/client';
+import type { ProjectStage } from '@prisma/client';
 import { projectCode, PROJECT_STAGES } from '@kk/shared';
 import { PrismaService } from '../prisma/prisma.service.js';
 
