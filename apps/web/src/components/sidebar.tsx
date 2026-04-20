@@ -40,8 +40,9 @@ export function Sidebar() {
           );
         })}
       </nav>
-      <div className="px-4 py-3 text-xs text-muted border-t border-border">
-        v0.1 • lokal
+      <div className="px-4 py-3 text-xs text-muted border-t border-border flex items-center justify-between">
+        <span>v0.1 • lokal</span>
+        <kbd className="chip text-[10px]">⌘K</kbd>
       </div>
     </aside>
   );

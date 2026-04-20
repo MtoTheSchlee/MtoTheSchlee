@@ -17,6 +17,7 @@ import { MetricsModule } from './metrics/metrics.module.js';
 import { SocialModule } from './social/social.module.js';
 import { AgentsModule } from './agents/agents.module.js';
 import { SpeechModule } from './speech/speech.module.js';
+import { SearchModule } from './search/search.module.js';
 import { RealtimeModule } from './realtime/realtime.module.js';
 
 @Module({
@@ -39,6 +40,7 @@ import { RealtimeModule } from './realtime/realtime.module.js';
     SocialModule,
     AgentsModule,
     SpeechModule,
+    SearchModule,
   ],
   controllers: [HealthController],
 })

@@ -3,6 +3,7 @@ import type { Metadata } from 'next';
 import { Providers } from './providers';
 import { Sidebar } from '@/components/sidebar';
 import { VoiceBar } from '@/components/voice-bar';
+import { CommandPalette } from '@/components/command-palette';
 
 export const metadata: Metadata = {
   title: 'KK-OS – Küchen Klaus',
@@ -19,6 +20,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
             <main className="flex-1 p-6 overflow-y-auto">{children}</main>
             <VoiceBar />
           </div>
+          <CommandPalette />
         </Providers>
       </body>
     </html>

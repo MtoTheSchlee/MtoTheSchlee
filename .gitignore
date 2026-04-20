@@ -7,6 +7,10 @@ coverage
 *.log
 .DS_Store
 
+# playwright artifacts
+apps/web/test-results/
+apps/web/playwright-report/
+
 # env
 .env
 .env.local

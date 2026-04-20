@@ -33,11 +33,14 @@ jobs:
       DATABASE_URL: postgresql://kkos:kkos@localhost:5432/kkos?schema=public
       REDIS_URL: redis://localhost:6379
       TENANT_DEFAULT_ID: 00000000-0000-0000-0000-000000000001
+      TENANT_DEFAULT_NAME: "Küchen Klaus"
       JWT_ACCESS_SECRET: ci-access
       JWT_REFRESH_SECRET: ci-refresh
       LLM_PROVIDER: noop
       FEATURE_VOICE: 'false'
       FEATURE_VOICE_CLONE: 'false'
+      NEXT_PUBLIC_API_URL: http://localhost:4000
+      NEXT_PUBLIC_TENANT_ID: 00000000-0000-0000-0000-000000000001
 
     steps:
       - uses: actions/checkout@v4
@@ -75,3 +78,26 @@ jobs:
 
       - name: Unit tests
         run: pnpm -r test
+
+      - name: Seed demo data
+        run: |
+          pnpm --filter @kk/api exec tsx prisma/seed.ts
+          pnpm --filter @kk/api exec tsx ../../scripts/demo-fixtures.ts
+
+      - name: Build web
+        run: pnpm --filter @kk/web build
+
+      - name: Start API + web and run E2E
+        run: |
+          pnpm --filter @kk/api exec node dist/src/main.js &
+          API_PID=$!
+          pnpm --filter @kk/web exec next start -p 3000 &
+          WEB_PID=$!
+          # Wait for both to respond before running tests.
+          for i in $(seq 1 30); do
+            curl -sf http://localhost:4000/api/healthz && curl -sf http://localhost:3000/ && break
+            sleep 1
+          done
+          pnpm --filter @kk/web exec playwright install chromium
+          pnpm --filter @kk/web exec playwright test
+          kill $API_PID $WEB_PID || true
