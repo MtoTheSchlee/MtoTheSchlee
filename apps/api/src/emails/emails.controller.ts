@@ -1,5 +1,19 @@
-import { Body, Controller, Get, Param, Patch, Post, Query, Res } from '@nestjs/common';
-import type { Response } from 'express';
+import {
+  BadRequestException,
+  Body,
+  Controller,
+  Get,
+  Param,
+  Patch,
+  Post,
+  Query,
+  Res,
+  UploadedFile,
+  UseInterceptors,
+} from '@nestjs/common';
+import { FileInterceptor } from '@nestjs/platform-express';
+import type { Express, Response } from 'express';
+import 'multer';
 import { TenantId } from '../common/tenant.decorator.js';
 import { Roles } from '../common/roles.decorator.js';
 import { EmailsService } from './emails.service.js';
@@ -41,6 +55,23 @@ export class EmailsController {
   @Patch(':id/assign')
   assign(@TenantId() t: string, @Param('id') id: string, @Body() dto: any) {
     return this.svc.assign(t, id, dto);
+  }
+
+  /**
+   * Upload an attachment body to an existing email. Used by the IMAP
+   * ingester once it has the raw MIME parts and needed by integration
+   * tests / CLI smoke checks.
+   */
+  @Roles('agent', 'owner')
+  @Post(':id/attachments')
+  @UseInterceptors(FileInterceptor('file', { limits: { fileSize: 20 * 1024 * 1024 } }))
+  async addAttachment(
+    @TenantId() tenantId: string,
+    @Param('id') id: string,
+    @UploadedFile() file: Express.Multer.File,
+  ) {
+    if (!file) throw new BadRequestException('file required');
+    return this.svc.putAttachmentBody(tenantId, id, file.originalname, file.mimetype, file.buffer);
   }
 
   /**

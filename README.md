@@ -49,21 +49,32 @@ docs/          – Architektur, Datenmodell, Workflows, MVP, ADRs
 
 ## Schnellstart (lokaler Pilotbetrieb)
 
+**Eine Zeile, alles hoch:**
+
+```bash
+scripts/quickstart.sh
+```
+
+Das Skript erledigt `.env`-Setup, `pnpm install`, alle Package-Builds,
+Prisma-Migration, Seed + Demo-Fixtures, dann startet es API, Worker und
+Web im Hintergrund und printet die Logs-Pfade. Voraussetzung: Node 20+,
+pnpm 9, laufender lokaler Postgres (DB `kkos`, User `kkos` Passwort
+`kkos`) und Redis auf den Default-Ports.
+
+**Weitere Subcommands:**
+
+```bash
+scripts/quickstart.sh stop      # stoppt alles
+scripts/quickstart.sh fixtures  # reseed nur die Demo-Daten
+scripts/quickstart.sh start     # nur Services starten (nach setup)
+```
+
+**Mit Docker** (startet zusätzlich MinIO, MailHog, STT-/TTS-Sidecars):
+
 ```bash
 cp .env.example .env
-
-# 1) Infrastruktur starten
 pnpm compose:up
-
-# 2) Abhängigkeiten installieren
-pnpm install
-
-# 3) Prisma-Client erzeugen und Schema migrieren
-pnpm --filter @kk/api exec prisma migrate dev --name init
-pnpm --filter @kk/api exec tsx prisma/seed.ts
-
-# 4) API, Worker und Web parallel starten
-pnpm dev
+scripts/quickstart.sh
 ```
 
 Offene URLs:

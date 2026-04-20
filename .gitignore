@@ -11,6 +11,9 @@ coverage
 apps/web/test-results/
 apps/web/playwright-report/
 
+# quickstart runtime logs
+.runtime/
+
 # env
 .env
 .env.local
