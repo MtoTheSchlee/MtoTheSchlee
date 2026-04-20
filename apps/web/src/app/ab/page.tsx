@@ -2,6 +2,7 @@
 import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { apiGet, apiPost } from '@/lib/api';
+import { AbUploadDropzone } from '@/components/ab-upload';
 
 export default function AbPage() {
   const [ampel, setAmpel] = useState<string>('');
@@ -26,6 +27,8 @@ export default function AbPage() {
           ))}
         </div>
       </div>
+
+      <AbUploadDropzone onIngested={() => list.refetch()} />
 
       <div className="surface overflow-hidden">
         <table className="w-full text-sm">
